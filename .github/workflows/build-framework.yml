@@ -1,0 +1,54 @@
+name: Build Framework
+
+on:
+  push:
+    branches: [ main ]   # 或你的默认分支名
+  workflow_dispatch:      # 允许手动触发
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 编译真机版本 (arm64)
+        run: |
+          mkdir -p build/arm64
+          xcrun -sdk iphoneos clang \
+            -arch arm64 \
+            -c *.m \
+            -o build/arm64/DCFaceDetectionModule.o \
+            -fobjc-arc \
+            -mios-version-min=12.0 \
+            -I.
+
+      - name: 编译模拟器版本 (x86_64)
+        run: |
+          mkdir -p build/x86_64
+          xcrun -sdk iphonesimulator clang \
+            -arch x86_64 \
+            -c *.m \
+            -o build/x86_64/DCFaceDetectionModule.o \
+            -fobjc-arc \
+            -mios-version-min=12.0 \
+            -I.
+
+      - name: 合并为 Fat 静态库
+        run: |
+          mkdir -p DCFaceDetectionModule.framework/Headers
+          cp *.h DCFaceDetectionModule.framework/Headers/
+          xcrun libtool -static -o DCFaceDetectionModule.framework/DCFaceDetectionModule \
+            build/arm64/DCFaceDetectionModule.o \
+            build/x86_64/DCFaceDetectionModule.o
+
+      - name: 签名（必须）
+        run: |
+          codesign --force --sign - DCFaceDetectionModule.framework
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: DCFaceDetectionModule.framework
+          path: DCFaceDetectionModule.framework
